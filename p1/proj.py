@@ -1,6 +1,7 @@
 import pygame
 import tkinter as tk
 import time
+import math
 
 class Default:
     font_name = "Arial Bold"
@@ -21,12 +22,19 @@ class Default:
     sleep_time = 0.04
     current_statistcs_message = "Current statistcs"
     module_statistics = 10000
-    statistics_file = "stat.txt"
+    statistics_file = "best_time.txt"
     statistics_message = "You best time: "
     funny_mode_value = "off"
+    separator_left = "|>"
+    separator_right = "<|"
+    reboot = "Reboot"
+    heatmap_file = "heatmap.txt"
+
 
 class Training:
     def __init__(self):
+        self.heatmap = None
+        self.heatmap_button = None
         self.key_number = None
         self.key_need_to_pres = None
         self.block = None
@@ -41,6 +49,16 @@ class Training:
         self.result_string = None
         self.substring = None
         self.current_passed_number = None
+        self.statistics_str = None
+        self.start_time = None
+        self.reboot_button = None
+        self.result_time = None
+        self.result_time_label = None
+
+    def print_result_time(self):
+        self.result_time_label = tk.Label(text = result_time, 
+                                          font = getattr(Default, "font_settings")) 
+        self.result_time_label.pack()
 
     def initialize_window(self):
         self.window = tk.Tk()
@@ -52,26 +70,50 @@ class Training:
                                  font = getattr(Default, "font_settings"))
         self.start_message.pack()
 
+    def show_heat_map(self):
+        result_string = ""
+        for [i, j, k] in self.heatmap:
+            result_string += i + ' ' + j + ' ' + k + ' ' + float(int(j) / int(k)) + '%\n'
+        result = tk.Label(text = result_string, font = getattr(Default, "font_settings"))
+        result.pack()
+
+#    def initialize_heat_map_button(self):
+#        self.heatmap = []
+#        self.heatmap_button = tk.Button(text = getattr(Default, "heat_map_button_text"), 
+#                                        font = getattr(Default, "font_settings"),
+#                                        command = self.show_heat_map)
+
     def initialize_start_button(self):
         self.start_button = tk.Button(text = getattr(Default, "button_message"), 
                                  command=self.start_of_training)
         self.start_button.pack()
 
+    def initialize_reboot_button(self):
+        self.reboot_button = tk.Button(text = getattr(Default, "reboot"), 
+                                 command=self.reboot_training)
+        self.reboot_button.pack()
+
     def initialize_statistics_message(self):
-        statistics_file = open(getattr(Default, "statistics_file"), 'r')
-        statistics_str = statistics_file.read()
+        self.statistics_file = open(getattr(Default, "statistics_file"), 'r')
+        self.statistics_str = self.statistics_file.read()
         statistics_message = (
-            getattr(Default, "statistics_message") + statistics_str)
+            getattr(Default, "statistics_message") + self.statistics_str)
         self.you_best_time = tk.Label(text = statistics_message, 
                                  font = getattr(Default, "font_settings"))
         self.you_best_time.pack()
+
+    def reboot_training(self):
+        self.window.destroy()
+        pygame.mixer.music.stop()#getattr(Default, "music_for_traine"))
+        self.main_window()
 
     def main_window(self):
         self.initialize_window()
         self.initialize_start_message()
         self.initialize_start_button()
+        self.initialize_reboot_button()
         self.initialize_statistics_message()
-        self.window.mainloop()
+#        self.initialize_heat_map_button()
 
     def print_ready_steady_go_message(self, message, message_time):
         my_message = tk.Label(text = message, 
@@ -100,9 +142,7 @@ class Training:
                                       getattr(Default, "go_time"))
 
     def get_percent_statistics(self):
-        return (self.current_passed_number / self.key_number * 
-                getattr(Default, "module_statistics") // 1 / 
-                getattr(Default, "module_statistics")) * 100
+        return round(self.current_passed_number / self.key_number, 2)
 
     def start_of_training(self):
         self.start_button.destroy()
@@ -115,19 +155,32 @@ class Training:
         self.main_training()
 
     def main_training(self):
-        start_time = time.time()
-        for i in range(len(self.file) // getattr(Default, "block_size")):
+        self.start_time = time.time()
+        size = int(getattr(Default, "block_size"))
+        for i in range((len(self.file) + size - 1) // size):
             left_border = i * getattr(Default, "block_size")
             right_border = min(len(self.file), (i + 1) * getattr(Default, "block_size"))
             self.substring = self.file[left_border: right_border]
-            self.text = tk.Label(text = self.substring, font = getattr(Default, "font_settings"))
+            self.text = tk.Label(
+                text = getattr(Default, "separator_left") + 
+                       self.substring + 
+                       getattr(Default, "separator_right"),
+                font = getattr(Default, "font_settings"))
             self.text.pack()
             self.result_string = ""
             self.key_number = 0
             self.one_iteration(i)
+            self.text.destroy()
         end_time = time.time()
-        if len(self.file) / (end_time - start_time) > float(statistics_file):
-            statistics_file.write(len(self.file) / (end_time - start_time))
+
+        self.result_time = end_time - self.start_time
+        print(self.result_time)
+        if (self.result_time < float(self.statistics_str) or len(self.statistics_file.read()) == 0):
+            self.statistics_file.close()
+            self.statistics_file = open(getattr(Default, "statistics_file"), 'w')
+            self.statistics_file.write(str(self.result_time))
+            self.statistics_file.close()
+            self.statistics_file = open(getattr(Default, "statistics_file"), 'r')
     
     def print_statistics(self, i, j):
         self.current_passed_number = i * getattr(Default, "block_size") + j
@@ -136,13 +189,15 @@ class Training:
         statistics_text += '/' + str(self.key_number)
         if self.key_number != 0:
             statistics_text += (' ' + str(self.get_percent_statistics()) + "%")
+        statistics_text += " time -> "
+        statistics_text += str(math.trunc(time.time() - self.start_time))
         self.statistics = tk.Label(text = statistics_text, 
                               font = getattr(Default, "font_settings"))
         self.statistics.pack()
         self.window.update()
 
     def one_iteration(self, i):
-        for j in range(len(self.substring)):
+        for j in range(len(self.substring) - 1):
             result_message = tk.Label(text = self.result_string, 
                                       font = getattr(Default, "font_settings"))
             result_message.pack()
@@ -155,10 +210,11 @@ class Training:
                 self.statistics.destroy()
             self.result_string += self.substring[j]
             result_message.destroy()
-        text.destroy()
+        self.text.destroy()
 
 def main():
     my_traininig = Training()
     my_traininig.main_window()
+    my_traininig.window.mainloop()
 
 main()
